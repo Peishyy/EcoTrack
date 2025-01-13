@@ -5,13 +5,55 @@ from streamlit.components.v1 import html
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 import pickle
+import base64
+from functions import input_preprocessing, chart
+from firebase_admin import credentials, initialize_app, auth as firebase_auth
+from urllib.parse import urlencode
 import io
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 import base64
 from functions import *
 
+# Firebase Admin Initialization
+cred = credentials.Certificate(".\service-account.json")
+initialize_app(cred)
+
 st.set_page_config(layout="wide",page_title="Carbon Footprint Calculator", page_icon="./media/favicon.ico")
+
+# Function to check token validity
+def verify_firebase_token(id_token):
+    try:
+        decoded_token = firebase_auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception as e:
+        st.error(f"Authentication failed: {e}")
+        return None
+
+# Redirect unauthenticated users
+def redirect_to_login():
+    login_url = "https://eco-track-ke.netlify.app"
+    redirect_script = f"""<script>window.location.href = '{login_url}';</script>"""
+    st.markdown(redirect_script, unsafe_allow_html=True)
+    st.stop()
+
+# Verify user authentication
+def authenticate_user():
+    query_params = st.experimental_get_query_params()
+    id_token = query_params.get("token", [None])[0]
+
+    if not id_token:
+        redirect_to_login()
+
+    user_data = verify_firebase_token(id_token)
+    if not user_data:
+        redirect_to_login()
+
+    return user_data
+
+# Authenticate user
+user = authenticate_user()
+st.sidebar.success(f"Logged in as: {user['email']}")
 
 def get_base64(bin_file):
     with open(bin_file, 'rb') as f:
